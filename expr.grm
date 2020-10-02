@@ -1,0 +1,152 @@
+%%
+
+%eop EOF
+%verbose
+%pure
+%name Expr
+
+%term NIL | RB | LB | OF | RCB | LCB | COMMA | EQUAL | NEW | RP | LP | COLON
+| DOT | ASSIGN | IF | THEN | ELSE | WHILE | DO | FOR | TO | BREAK | LET | IN | END 
+| SEMICOLON | TYPE | CLASS | EXTENDS | FUNCTION | PRIMITIVE | IMPORT | VAR | METHOD 
+| ARRAY | PLUS | MINUS | MUL | DIV | LESS | GREAT | LESSGREAT | LESSEQUAL | GREATEQUAL 
+| AND | OR | EOF | ID of string | QUOTE of string | CONST of int | UMINUS | lv
+
+%nonterm PROGRAM of Ast.Program
+	| EXP 	 of Ast.EXP
+	| EXPS	 of Ast.EXP list
+	| EXPtail of Ast.EXP list
+	| RECBODY of (Ast.Id * Ast.EXP) list
+	| RECTAIL of (Ast.Id * Ast.EXP) list
+	| FUNCTIONBODY of (Ast.EXP) list
+	| FUNCTIONTAIL of Ast.EXP list 
+	| LVALUE of Ast.EXP
+	| METHODBODY of Ast.EXP list
+	| METHODtail of Ast.EXP list
+	| DECS of Ast.DEC list
+	| DEC of Ast.DEC
+	| TY of Ast.Type
+	| TYFIELDS of (Ast.Id * Ast.Id) list
+	| TYFILEDStail of (Ast.Id * Ast.Id) list
+	| CLASSFIELDS of Ast.ClassField list
+	| CLASSFIELD of Ast.ClassField
+	| VARDEC of Ast.VarDec
+
+	
+%noshift EOF
+%start PROGRAM
+
+
+%nonassoc ASSIGN
+%nonassoc lv
+%nonassoc IF
+%nonassoc WHILE ELSE
+%nonassoc LB
+%nonassoc OF
+%left OR
+%left AND
+%nonassoc LESS GREAT EQUAL LESSEQUAL LESSGREAT GREATEQUAL
+%left PLUS MINUS 
+%left MUL DIV 
+%left UMINUS
+
+%pos int
+
+%%
+
+PROGRAM : EXP			(Ast.Expression EXP)
+	| DECS			(Ast.Decls DECS)
+	
+EXP	:NIL			(Ast.Nil)
+	|CONST			(Ast.Const CONST )
+	|QUOTE			(Ast.Quote QUOTE )
+	| EXP PLUS EXP		(Ast.plus EXP1 EXP2)
+	| EXP MINUS EXP		(Ast.minus EXP1 EXP2)
+	| EXP MUL EXP		(Ast.mul EXP1 EXP2)
+	| EXP DIV EXP	(Ast.divide EXP1 EXP2)
+	| EXP EQUAL EXP		(Ast.equal EXP1 EXP2)
+	| EXP LESS EXP		(Ast.less EXP1 EXP2)
+	| EXP GREAT EXP		(Ast.great EXP1 EXP2)
+	| EXP LESSGREAT EXP	(Ast.lessgreat EXP1 EXP2)
+	| EXP LESSEQUAL EXP	(Ast.lessequal EXP1 EXP2)
+	| EXP GREATEQUAL EXP	(Ast.greatequal EXP1 EXP2)
+	| EXP AND EXP		(Ast.And EXP1 EXP2)
+	| EXP OR EXP		(Ast.or EXP1 EXP2)
+	| MINUS EXP		(Ast.UMINUS EXP)
+	|IF EXP THEN EXP 	%prec IF		(Ast.If EXP1 EXP2) 
+	| IF EXP THEN EXP ELSE EXP 	%prec ELSE	(Ast.Else EXP1 EXP2 EXP3)
+	| WHILE EXP DO EXP	%prec WHILE		(Ast.While EXP1 EXP2)
+	| FOR ID ASSIGN EXP TO EXP DO EXP	%prec WHILE 	(Ast.For (Ast.Var ID) EXP1 EXP2 EXP3 )
+	| BREAK			(Ast.Break)
+	| LET DECS IN EXPS END	(Ast.Let (DECS,EXPS))
+	| LP EXPS RP		(Ast.Exps EXPS)
+	| ID LB EXP RB 	%prec OF	(Ast.ArrayCreate (( Ast.Var ID),EXP1 ))
+	| ID LCB RECBODY RCB	(Ast.RecordCreate (( Ast.Var ID),RECBODY))
+	| NEW ID 		(Ast.New (Ast.Var ID))
+	| ID LP FUNCTIONBODY RP (Ast.Functioncall ((Ast.Var ID),FUNCTIONBODY))
+	| LVALUE		(LVALUE)
+	| LVALUE ASSIGN EXP	%prec ASSIGN	(Ast.Assign (LVALUE,EXP) )
+	| LVALUE DOT ID LP METHODBODY RP	(Ast.Methodcall (LVALUE,(Ast.Var ID),METHODBODY) )
+
+EXPS : 				( [] )
+	 | EXP	EXPtail		( EXP :: EXPtail )
+
+EXPtail : 			( [] )
+	| SEMICOLON EXP EXPtail ( EXP :: EXPtail)
+
+RECBODY :			( [] )	
+	| ID EQUAL EXP RECTAIL		( ((Ast.Var ID),EXP) :: RECTAIL )
+	
+RECTAIL :			  ( [] )
+	| COMMA ID EQUAL EXP RECTAIL ( ((Ast.Var ID),EXP) :: RECTAIL )
+
+FUNCTIONBODY :			( [] )
+	|EXP FUNCTIONTAIL 	( EXP :: FUNCTIONTAIL)
+
+FUNCTIONTAIL : 			( [] )
+	| COMMA EXP FUNCTIONTAIL	( EXP ::FUNCTIONTAIL)
+
+LVALUE : ID	%prec lv	(Ast.IDENT(Ast.Var ID))
+	| LVALUE DOT ID		(Ast.Lvalue1 (LVALUE, (Ast.Var ID)))
+	| LVALUE LB EXP RB	(Ast.Lvalue2 (LVALUE,EXP) ) 
+
+METHODBODY :			( [] )
+	| EXP METHODtail	( EXP :: METHODtail)
+
+METHODtail :			( [] )
+	| COMMA  EXP METHODtail		( EXP :: METHODtail)
+
+DECS :				( [] )
+	| DEC DECS		( DEC :: DECS)
+
+DEC : IMPORT QUOTE		(Ast.Import (Ast.Quote QUOTE) )
+	| TYPE ID EQUAL TY	( Ast.Typedec (Ast.Var ID,TY) )
+	| FUNCTION ID LP TYFIELDS RP EQUAL EXP	( Ast.Functiondec1 ( (Ast.Var ID ),Ast.Tyfields TYFIELDS  ,EXP ) )   
+	| FUNCTION ID LP TYFIELDS RP COLON ID EQUAL EXP	( Ast.Functiondec2 ( (Ast.Var ID1),(Ast.Var ID2),Ast.Tyfields TYFIELDS  ,EXP ) )   
+	| PRIMITIVE ID LP TYFIELDS RP 	( Ast.Primitivedec1 ( (Ast.Var ID ),Ast.Tyfields TYFIELDS ) )    
+	| PRIMITIVE ID LP TYFIELDS RP COLON ID 	( Ast.Primitivedec2 ( (Ast.Var ID1),(Ast.Var ID2),Ast.Tyfields TYFIELDS )  )  
+	| CLASS ID LCB CLASSFIELDS RCB	(Ast.Classdec1 ((Ast.Var ID),CLASSFIELDS))
+	| CLASS ID EXTENDS ID LCB CLASSFIELDS RCB (Ast.Classdec2 ((Ast.Var ID1),(Ast.Var ID2),CLASSFIELDS))
+	| VARDEC		(Ast.Vardec VARDEC )
+
+
+TY : ID 		( Ast.TyIDENT ( Ast.Var ID))
+	| LCB TYFIELDS RCB	( Ast.Tyf (Ast.Tyfields TYFIELDS) )
+	| ARRAY OF ID		( Ast.Array (Ast.Var ID))
+	| CLASS LCB CLASSFIELDS RCB	( Ast.Classfields CLASSFIELDS )
+	| CLASS EXTENDS ID LCB CLASSFIELDS RCB	( Ast.Classfields2 ((Ast.Var ID),CLASSFIELDS)) 
+
+TYFIELDS : 			( [] )
+	| ID COLON ID TYFILEDStail	(( Ast.Var ID1, Ast.Var ID2 ) :: TYFILEDStail )
+
+TYFILEDStail : 			( [] )
+	| COMMA ID COLON ID TYFILEDStail	( ( Ast.Var ID1,Ast.Var ID2 ) :: TYFILEDStail )
+
+CLASSFIELDS : 			( [] )
+	| CLASSFIELD CLASSFIELDS	( CLASSFIELD :: CLASSFIELDS)
+
+CLASSFIELD :VARDEC	( Ast.ClassVar VARDEC )
+	| METHOD ID LP TYFIELDS RP	EQUAL EXP	( Ast.Method1 ( (Ast.Var ID), (Ast.Tyfields TYFIELDS), EXP))
+	| METHOD ID LP TYFIELDS RP	COLON ID EQUAL EXP	( Ast.Method2 ( (Ast.Var ID1),(Ast.Var ID2),(Ast.Tyfields TYFIELDS), EXP))
+
+VARDEC : VAR ID COLON ID  ASSIGN EXP	( Ast.Vardec1 ((Ast.Var ID1),(Ast.Var ID2),EXP) )
+		| VAR ID ASSIGN EXP	( Ast.Vardec2 ((Ast.Var ID1),EXP) )
